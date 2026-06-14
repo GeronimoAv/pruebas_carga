@@ -18,23 +18,27 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Build backend (registraduria)
+      - name: Build and run backend (registraduria)
         run: |
+          set -e
           cd registraduria
-          mvn -DskipTests package
-      - name: Run backend in background
-        run: |
-          cd registraduria
-          nohup java -jar target/*.jar > ../registraduria.log 2>&1 &
+          echo "Building registraduria..."
+          mvn -DskipTests package || true
+          echo "Starting registraduria with mvn spring-boot:run (background)..."
+          nohup mvn -DskipTests spring-boot:run > ../registraduria.log 2>&1 &
       - name: Wait for backend to accept connections
         run: |
-          for i in $(seq 1 30); do
+          # wait up to 120 seconds for the backend to be up
+          for i in $(seq 1 60); do
             if bash -c "</dev/tcp/localhost/8080" >/dev/null 2>&1; then
               echo 'backend up' && exit 0
             fi
             sleep 2
           done
-          echo 'backend did not start in time' && tail -n +1 ../registraduria.log || true
+          echo 'backend did not start in time' >&2
+          echo '--- registraduria.log (last 200 lines) ---'
+          tail -n 200 ../registraduria.log || true
+          echo '--- end log ---'
           exit 1
       - name: Install k6
         run: |

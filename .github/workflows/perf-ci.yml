@@ -1,8 +1,12 @@
 name: perf-register-voter
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   k6-perf:

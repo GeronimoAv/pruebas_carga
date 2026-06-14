@@ -19,5 +19,4 @@ registraduria/target/
 perf/results/baseline.json
 perf/results/load.json 
 perf/results/stress.json
-perf/scripts/generate_persons.py
 documentacion.md

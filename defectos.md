@@ -120,6 +120,51 @@ Alta tasa de rechazos funcionales bajo stress; el sistema no cumple el requisito
 - Se añadió `perf/scripts/generate_persons.py` para generar datasets grandes y evitar colisiones por escasez de IDs.
 - Recomendación: reiniciar la app (H2) antes de cada escenario y re-ejecutar las corridas para validar la mitigación.
 
+------------------------------------------------------------------------
+
+## Defecto PERF-06 --- 100% Bad Requests en Load
+
+- Capa afectada: API / Validación de entrada
+- Escenario: Load Test (200 VUs)
+- SLO definido: error rate < 1% · p95 < 300 ms
+- Resultado obtenido: `register_failed` = 100% (todas las iteraciones fallaron)
+
+### Evidencia
+
+Extraída de `perf/results/summary-load.json`:
+
+```
+iterations: 2,342,105
+throughput (req/s): 5,533.36
+http_req_duration.avg: 30.26927 ms
+http_req_duration.p95: 56.70712 ms
+http_req_duration.p99: 75.05834 ms
+status 200: passes=0 fails=2,342,105
+register_failed.rate: 1.0 (100% failed)
+```
+
+### Impacto
+
+El endpoint está rechazando todas las peticiones bajo el escenario de carga; la corrida no entrega información útil para medir latencia válida ni throughput funcional.
+
+### Causa probable
+
+- Payloads inválidos o parsing/validación fallando en el servidor bajo concurrencia.
+- `DATA_FILE` no apuntado al CSV correcto al ejecutar k6 (usar el archivo generado).
+- `buildUniqueId` generando IDs fuera del rango o con formato no esperado.
+
+### Acción recomendada
+
+1. Revisar `registraduria` logs para la causa exacta del 400 (stack trace / mensaje de validación).
+2. Ejecutar `curl` con 2–5 entradas del CSV para reproducir el 400 fuera de k6.
+3. Aumentar temporalmente el logging de payloads fallidos en k6 (imprimir payloads) y re-ejecutar un `load` corto (1 min) para capturar ejemplos.
+4. Confirmar `DATA_FILE` y volver a correr. Si persiste, agregar validaciones del JSON en el cliente para asegurar formato.
+
+### Estado
+
+Abierto
+
+
 ### Estado
 
 Abierto

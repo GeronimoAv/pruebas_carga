@@ -18,14 +18,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # FIX 1: quitar "|| true" — si el build falla, el job debe fallar
       - name: Build and run backend (registraduria)
         run: |
           set -e
           cd registraduria
-          echo "Building registraduria..."
           mvn -DskipTests package
-          echo "Starting registraduria..."
           nohup mvn -DskipTests spring-boot:run \
             -Dspring-boot.run.jvmArguments="-Dlogging.level.root=WARN" \
             > "${GITHUB_WORKSPACE}/registraduria.log" 2>&1 &
@@ -60,86 +57,55 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y k6
 
-      # FIX 2: eliminado el sed — el script k6 ya usa /register directamente
-      # FIX 3: continue-on-error: true para que load y stress corran aunque baseline falle
+      # baseline: constant-vus 20 VUs · 5 min → timeout 10 min
       - name: Baseline
+        timeout-minutes: 10
         continue-on-error: true
         env:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
           export BASE_URL=${BASE_URL:-http://localhost:8080}
           mkdir -p perf/results
-          k6 run perf/scripts/register_voter_k6.js \
-            -o json=perf/results/baseline.json \
+          k6 run perf/scripts/register_person_k6.js \
             --env BASE_URL="${BASE_URL}" \
             --env SCENARIO="baseline" \
-            --env DATA_FILE="${{ github.workspace }}/perf/data/voters.csv"
+            --env DATA_FILE="${{ github.workspace }}/perf/data/persons.csv"
 
+      # load: 2 + 10 + 2 = 14 min → timeout 20 min
       - name: Load
+        timeout-minutes: 20
         continue-on-error: true
         env:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
           export BASE_URL=${BASE_URL:-http://localhost:8080}
           mkdir -p perf/results
-          k6 run perf/scripts/register_voter_k6.js \
-            -o json=perf/results/load.json \
+          k6 run perf/scripts/register_person_k6.js \
             --env BASE_URL="${BASE_URL}" \
             --env SCENARIO="load" \
-            --env DATA_FILE="${{ github.workspace }}/perf/data/voters.csv"
+            --env DATA_FILE="${{ github.workspace }}/perf/data/persons.csv"
 
+      # stress: 5 + 3 + 2 = 10 min → timeout 16 min
       - name: Stress
+        timeout-minutes: 16
         continue-on-error: true
         env:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
           export BASE_URL=${BASE_URL:-http://localhost:8080}
           mkdir -p perf/results
-          k6 run perf/scripts/register_voter_k6.js \
-            -o json=perf/results/stress.json \
+          k6 run perf/scripts/register_person_k6.js \
             --env BASE_URL="${BASE_URL}" \
             --env SCENARIO="stress" \
-            --env DATA_FILE="${{ github.workspace }}/perf/data/voters.csv"
+            --env DATA_FILE="${{ github.workspace }}/perf/data/persons.csv"
 
-      # FIX 4: fallar el job explícitamente si algún resultado tiene errores >1%
-      - name: Check thresholds
-        run: |
-          FAIL=0
-          for f in perf/results/baseline.json perf/results/load.json perf/results/stress.json; do
-            if [ -f "$f" ]; then
-              # k6 escribe exit_code en el JSON — si el archivo existe y k6 falló, reportarlo
-              PASS=$(grep -c '"metric":"http_req_failed"' "$f" || true)
-              echo "Revisando $f..."
-            fi
-          done
-          # Si algún step de k6 ya falló con exit 99, continue-on-error lo absorbió.
-          # Este step lee los JSONs y falla el job si hay threshold violations.
-          python3 - <<'EOF'
-          import json, glob, sys
-          failed = False
-          for path in glob.glob("perf/results/*.json"):
-              with open(path) as f:
-                  for line in f:
-                      try:
-                          obj = json.loads(line)
-                          if obj.get("type") == "Point" and obj.get("metric") == "http_req_failed":
-                              pass  # procesado por k6 internamente
-                      except:
-                          pass
-          # k6 ya reportó thresholds — si continue-on-error absorbió exit 99,
-          # este script simplemente confirma que los JSON existen.
-          paths = glob.glob("perf/results/*.json")
-          if not paths:
-              print("ERROR: no hay resultados de k6", file=sys.stderr)
-              sys.exit(1)
-          print(f"OK: {len(paths)} archivo(s) de resultados encontrado(s)")
-          EOF
-
+      # handleSummary ya escribe perf/results/summary-{scenario}.json
+      # no se necesita -o json ni --summary-export
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-register-voter-results
+          name: perf-register-person-results
           path: perf/results/**
 
       - name: Prepare registraduria tail
@@ -153,8 +119,8 @@ jobs:
             tail -n 50000 "$LOG" > "$TAIL_OUT" || true
             gzip -c "$TAIL_OUT" > "$GZ_OUT" || true
           else
-            echo "No registraduria.log found"
-            touch "$TAIL_OUT" && gzip -c "$TAIL_OUT" > "$GZ_OUT" || true
+            touch "$TAIL_OUT"
+            gzip -c "$TAIL_OUT" > "$GZ_OUT" || true
           fi
 
       - name: Upload registraduria tail

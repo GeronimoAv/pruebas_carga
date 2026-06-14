@@ -1,264 +1,139 @@
-# Registro de Defectos -- Pruebas de Carga y Rendimiento
+# Registro de Defectos — Pruebas de Carga y Rendimiento
 
-Curso: Testing y Validación de Software\
-Proyecto: Pruebas de Carga y Rendimiento\
-Equipo: \[Nombre del equipo\]\
-Fecha: \[Fecha\]
+Curso: Testing y Validación de Software
+Proyecto: Pruebas de Carga y Rendimiento
+Equipo: [Nombre del equipo]
+Fecha: 2026-06-14
 
-------------------------------------------------------------------------
+---
 
-## Introducción
+Este documento recoge los defectos confirmados durante las corridas
+baseline, load y stress y las acciones recomendadas.
 
-Este documento recopila los defectos identificados durante la ejecución
-de pruebas de rendimiento (Baseline, Load, Stress, Spike, Soak y
-Regresión).\
-Cada defecto se documenta para garantizar trazabilidad, análisis técnico
-y propuesta de mejora.
+---
 
-------------------------------------------------------------------------
+## Resumen ejecutivo
 
-# Formato 1: Lista detallada
+- PERF-01 (Baseline): margen funcional aceptable pero cercano al SLO (register_failed ≈ 0.97%).
+- PERF-02 (Load): 100% de rechazos funcionales (400 Bad Request) — bloqueo crítico de la corrida.
+- PERF-03 (Stress): rechazo funcional ≈ 2.14% (> 1% SLO) y p99 elevado (~349 ms).
 
-## Defecto PERF-01 --- Incumplimiento de SLO de latencia bajo Load
+---
 
-- Capa afectada: Aplicación / Base de datos\
-- Escenario: Load Test (200 VUs)\
-- SLO definido: p95 \< 300 ms\
-- Resultado esperado: Cumplimiento del SLO bajo carga nominal.\
-- Resultado obtenido: p95 = 612 ms
+## Defecto PERF-01 — Error funcional marginal en Baseline
 
-### Evidencia
-
-http_req_duration: avg=402ms\
-p(95)=612ms\
-p(99)=890ms
-
-### Impacto
-
-Incumplimiento del objetivo de nivel de servicio bajo carga esperada.
-
-### Causa probable
-
--   Saturación del pool de conexiones.\
--   Consulta sin índice.
-
-### Estado
-
-Abierto
-
-### Prioridad
-
-Alta
-
-------------------------------------------------------------------------
-
-## Defecto PERF-02 --- Error rate elevado bajo Stress
-
--   Capa afectada: Servidor de aplicación\
--   Escenario: Stress Test (600 VUs)\
--   SLO definido: Error rate \< 1%\
--   Resultado obtenido: 3.8%
+- Capa afectada: Lógica de negocio / Validaciones
+- Escenario: Baseline (20 VUs, 5 min)
+- SLO definido: error rate < 1%
+- Resultado obtenido: `register_failed.rate` = 0.009707150065404508 (≈ 0.97%)
 
 ### Evidencia
-
-http_req_failed: 3.8%\
-status=500 detectado
-
-### Impacto
-
-Fallas del sistema bajo carga alta.
-
-### Causa probable
-
--   Agotamiento de threads.\
--   Configuración insuficiente.
-
-### Estado
-
-En progreso
-
-### Prioridad
-
-Crítica
-
-------------------------------------------------------------------------
-
-## Defecto PERF-05 --- Alto porcentaje de registros rechazados en Stress
-
--   Capa afectada: Aplicación / Lógica de registro
--   Escenario: Stress Test (600 VUs)
--   SLO definido: error rate < 1% · p95 < 300 ms
--   Resultado obtenido: register_failed: passes=4,919,574 fails=6,275,029 (≈56.05% fallidos)
-
-### Evidencia
-
-Extraída de `perf/results/summary-stress.json` (carrera realizada):
-
+Extraída de `perf/results/summary-baseline.json`:
 ```
-iterations: 12,810,758
-throughput (req/s): 20,910.45
-http_req_duration.avg: 19.22480 ms
-http_req_duration.p95: 29.35439 ms
-http_req_duration.p99: 236.36143 ms
-register_failed.rate: 0.96097 (≈96.10% failed)
-checks.rate: 0.51951 (≈48.05% passes / ≈51.95% fails)
+iterations: 3,907,223
+http_reqs.rate: 12725.35
+http_req_duration.avg: 1.34499 ms
+http_req_duration.p95: 2.472797 ms
+register_failed.rate: 0.009707150065404508
+checks.rate: 0.9951464249672978
 ```
 
 ### Impacto
-
-Alta tasa de rechazos funcionales bajo stress; el sistema no cumple el requisito de disponibilidad funcional en escenarios extremos.
-
-### Causa probable
-
-- Dataset insuficiente / colisiones de IDs generados por la estrategia original de `buildUniqueId`.
-- BD H2 con datos persistentes entre corridas (no reinicio) → `DUPLICATED`.
-- Lógica de verificación de existencia costosa bajo concurrencia; posible contención en transacciones.
-
-### Acción tomada
-
-- Se mejoró `buildUniqueId` en `perf/scripts/register_person_k6.js` para reducir colisiones.
-- Se añadió `perf/scripts/generate_persons.py` para generar datasets grandes y evitar colisiones por escasez de IDs.
-- Recomendación: reiniciar la app (H2) antes de cada escenario y re-ejecutar las corridas para validar la mitigación.
-
-------------------------------------------------------------------------
-
-## Defecto PERF-06 --- 100% Bad Requests en Load
-
-- Capa afectada: API / Validación de entrada
-- Escenario: Load Test (200 VUs)
-- SLO definido: error rate < 1% · p95 < 300 ms
-- Resultado obtenido: `register_failed` = 100% (todas las iteraciones fallaron)
-
-### Evidencia
-
-Extraída de `perf/results/summary-load.json`:
-
-```
-iterations: 2,342,105
-throughput (req/s): 5,533.36
-http_req_duration.avg: 30.26927 ms
-http_req_duration.p95: 56.70712 ms
-http_req_duration.p99: 75.05834 ms
-status 200: passes=0 fails=2,342,105
-register_failed.rate: 1.0 (100% failed)
-```
-
-### Impacto
-
-El endpoint está rechazando todas las peticiones bajo el escenario de carga; la corrida no entrega información útil para medir latencia válida ni throughput funcional.
+Bajo impacto funcional (por debajo del umbral 1%), pero merecedor de seguimiento por proximidad al límite.
 
 ### Causa probable
-
-- Payloads inválidos o parsing/validación fallando en el servidor bajo concurrencia.
-- `DATA_FILE` no apuntado al CSV correcto al ejecutar k6 (usar el archivo generado).
-- `buildUniqueId` generando IDs fuera del rango o con formato no esperado.
+- Pequeñas colisiones de datos de prueba o validaciones puntuales.
 
 ### Acción recomendada
-
-1. Revisar `registraduria` logs para la causa exacta del 400 (stack trace / mensaje de validación).
-2. Ejecutar `curl` con 2–5 entradas del CSV para reproducir el 400 fuera de k6.
-3. Aumentar temporalmente el logging de payloads fallidos en k6 (imprimir payloads) y re-ejecutar un `load` corto (1 min) para capturar ejemplos.
-4. Confirmar `DATA_FILE` y volver a correr. Si persiste, agregar validaciones del JSON en el cliente para asegurar formato.
+- Aumentar tamaño del dataset de prueba (usar `perf/scripts/generate_persons.py`).
+- Volver a ejecutar baseline tras limpiar la BD H2.
 
 ### Estado
+Abierto — Prioridad: Media
 
-Abierto
+---
 
+## Defecto PERF-02 — 100% Bad Requests en Load (bloqueante)
 
-### Estado
-
-Abierto
-
-### Prioridad
-
-Crítica
-
-
-## Defecto PERF-03 --- Degradación progresiva en Soak Test
-
--   Capa afectada: JVM / Memoria\
--   Escenario: Soak Test (2 horas)\
--   Resultado esperado: Latencia estable\
--   Resultado obtenido: Incremento progresivo de 210ms a 480ms
-
-### Impacto
-
-Posible fuga de memoria o acumulación de recursos.
-
-### Estado
-
-Abierto
-
-### Prioridad
-
-Media
-
-------------------------------------------------------------------------
-
-# Formato 2: Tabla de seguimiento
-
-  ----------------------------------------------------------------------------------
-## Defecto PERF-04 --- Alta tasa de registros rechazados en Load
-
--   Capa afectada: Aplicación / Lógica de registro
--   Escenario: Load Test (200 VUs)
--   SLO definido: error rate < 1% · p95 < 300 ms
--   Resultado obtenido: register_failed.rate = 0.6447 (64.47%) · checks.rate = 0.6776 (67.76%)
+- Capa afectada: API / Validación de entrada
+- Escenario: Load (0→200 VUs, 14 min total)
+- SLO definido: error rate < 1% · p95 < 300 ms
+- Resultado obtenido: `register_failed.rate` = 1.0 (100% de fallos)
 
 ### Evidencia
-
 Extraída de `perf/results/summary-load.json`:
-
 ```
-iterations: 15433447
-throughput (req/s): 18352.68
-http_req_duration.avg: 8.845746 ms
-http_req_duration.p95: 17.656987 ms
-register_failed.rate: 0.6447144957312517
-checks.rate: 0.6776419422051341
+iterations: 2,342,105
+http_reqs.rate: 5533.36
+http_req_duration.avg: 30.26927 ms
+http_req_duration.p95: 56.7071172 ms
+status 200: passes=0 fails=2,342,105
+body VALID: passes=0 fails=2,342,105
+register_failed.rate: 1.0
 ```
 
 ### Impacto
-
-La mayoría de las solicitudes de registro son rechazadas (DUPLICATED o validaciones negativas), lo que provoca un error funcional masivo en el escenario nominal de carga.
+La corrida no entrega métricas funcionales válidas; el endpoint rechaza todas las peticiones bajo este escenario (no se puede medir latencia funcional ni throughput válido).
 
 ### Causa probable
+- Payloads inválidos o campos fuera de formato/alcance esperados por `PersonDTO`.
+- `DATA_FILE` apuntando a un CSV incorrecto o desalineado con el script.
+- `buildUniqueId` generando IDs que el servidor considera inválidos (ej.: overflow o formato inesperado).
+- Posible validación en servidor que se dispara bajo concurrencia (race condition en parsing/serialización).
 
-- Colisiones de IDs generados por `buildUniqueId` / dataset insuficiente.
-- La BD H2 contiene registros previos (no se reinició la app) produciendo duplicados.
-- Lógica de validación de existencia posiblemente costosa bajo concurrencia.
+### Acciones recomendadas (prioritarias)
+1. Extraer entradas de payload que fallan: aumentar temporalmente `console.error` en `perf/scripts/register_person_k6.js` y re-ejecutar un `load` corto (1 min) para capturar ejemplos.
+2. Revisar `registraduria.log` para obtener el mensaje/stacktrace exacto que causa los `400`.
+3. Reproducir manualmente (curl) 5–10 payloads extraídos para confirmar el 400 fuera de k6.
+4. Confirmar `DATA_FILE` y que los IDs generados caben en `int` (<= 2,147,483,647). Adaptar `generate_persons.py` si es necesario.
 
 ### Estado
+Abierto — Prioridad: Crítica
 
-Abierto
+---
 
-### Prioridad
+## Defecto PERF-03 — Rechazos y latencia elevada en Stress
 
-Crítica
+- Capa afectada: Aplicación / Pool DB / JVM
+- Escenario: Stress (200→600 VUs)
+- Resultado obtenido: `register_failed.rate` = 0.021409477381561473 (≈ 2.14%) · p99 ≈ 348.71 ms
 
-------------------------------------------------------------------------
+### Evidencia
+Extraída de `perf/results/summary-stress.json`:
+```
+iterations: 8,697,550
+http_reqs.rate: 14115.72
+http_req_duration.avg: 30.08808 ms
+http_req_duration.p95: 72.3202861 ms
+http_req_duration.p99: 348.71078288 ms
+register_failed.rate: 0.021409477381561473
+```
 
-  PERF-04   Load       Error funcional alto  register_failed ~64% Abierto     Crítica
-  PERF-05   Stress     Error funcional alto  register_failed ~56% Abierto     Crítica
-  ID        Escenario   Resultado Esperado Resultado Obtenido Estado     Prioridad
-  --------- ----------- ------------------ ------------------ ---------- -----------
-  PERF-01   Load        p95 \< 300ms       612ms              Abierto    Alta
+### Impacto
+Error rate por encima del SLO y p99 alto; indica contención en recursos bajo carga extrema.
 
-  PERF-02   Stress      Error \< 1%        3.8%               En         Crítica
-                                                              progreso   
+### Causa probable
+- Contención en la BD (consultas sin índice o bloqueo en comprobación de duplicados).
+- Pool de conexiones JDBC insuficiente.
+- Operaciones sin optimización en la ruta de registro.
 
-  PERF-03   Soak        Latencia estable   Degradación        Abierto    Media
-  ----------------------------------------------------------------------------------
+### Acción recomendada
+- Añadir índice en la columna `id` de la tabla de persistencia.
+- Aumentar el pool de conexiones (HikariCP) para pruebas de carga.
+- Re-ejecutar stress tras aplicar cambios y comparar resultados.
 
-------------------------------------------------------------------------
+### Estado
+Abierto — Prioridad: Alta
 
-## Convenciones de Estado
+---
 
-Abierto: Defecto identificado sin corrección aplicada.\
-En progreso: En proceso de corrección.\
-Resuelto: Corregido y validado con nuevas pruebas.
+## Registro de cambios y próximos pasos
 
-------------------------------------------------------------------------
+- Se mejoró `perf/scripts/register_person_k6.js` (`buildUniqueId` hashing).
+- Se añadió `perf/scripts/generate_persons.py` para generar datasets grandes.
+- Próximo paso: capturar payloads fallidos y revisar `registraduria.log` para PERF-02.
 
-Universidad de La Sabana -- Facultad de Ingeniería\
-Curso: Testing y Validación de Software (2025-1)
+---
+
+Universidad de La Sabana — Facultad de Ingeniería
+Curso: Testing y Validación de Software

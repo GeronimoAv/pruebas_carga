@@ -25,7 +25,7 @@ jobs:
           echo "Building registraduria..."
           mvn -DskipTests package || true
           echo "Starting registraduria with mvn spring-boot:run (background)..."
-          nohup mvn -DskipTests spring-boot:run > ../registraduria.log 2>&1 &
+          nohup mvn -DskipTests spring-boot:run > "${GITHUB_WORKSPACE}/registraduria.log" 2>&1 &
       - name: Wait for backend to accept connections
         run: |
           # wait up to 120 seconds for the backend to be up
@@ -37,7 +37,7 @@ jobs:
           done
           echo 'backend did not start in time' >&2
           echo '--- registraduria.log (last 200 lines) ---'
-          tail -n 200 ../registraduria.log || true
+          tail -n 200 "${GITHUB_WORKSPACE}/registraduria.log" || true
           echo '--- end log ---'
           exit 1
       - name: Install k6
@@ -87,3 +87,9 @@ jobs:
         with:
           name: perf-register-voter-results
           path: perf/results/**
+      - name: Upload registraduria log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registraduria-log
+          path: registraduria.log

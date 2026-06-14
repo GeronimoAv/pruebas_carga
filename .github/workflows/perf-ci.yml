@@ -87,9 +87,26 @@ jobs:
         with:
           name: perf-register-voter-results
           path: perf/results/**
-      - name: Upload registraduria log
+      - name: Prepare registraduria tail (avoid huge artifacts)
+        if: always()
+        run: |
+          set -e || true
+          LOG="${GITHUB_WORKSPACE}/registraduria.log"
+          TAIL_OUT="${GITHUB_WORKSPACE}/registraduria_tail.log"
+          GZ_OUT="${GITHUB_WORKSPACE}/registraduria_tail.log.gz"
+          if [ -f "$LOG" ]; then
+            echo "Log size: $(stat -c%s "$LOG") bytes"
+            # keep last 50k lines (adjust if needed)
+            tail -n 50000 "$LOG" > "$TAIL_OUT" || true
+            gzip -c "$TAIL_OUT" > "$GZ_OUT" || true
+          else
+            echo "No registraduria.log found"
+            touch "$TAIL_OUT"
+            gzip -c "$TAIL_OUT" > "$GZ_OUT" || true
+          fi
+      - name: Upload registraduria tail
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: registraduria-log
-          path: registraduria.log
+          name: registraduria-tail-log
+          path: registraduria_tail.log.gz

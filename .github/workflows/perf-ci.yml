@@ -53,7 +53,9 @@ jobs:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
           export BASE_URL=${BASE_URL:-http://localhost:8080}
-          k6 run perf/scripts/register_voter_k6.js \
+          # Patch script at runtime to match controller path if needed (CI-only change)
+          sed 's@/api/v1/voters/register@/register@g' perf/scripts/register_voter_k6.js > /tmp/register_voter_k6_runtime.js
+          k6 run /tmp/register_voter_k6_runtime.js \
             -o json=perf/results/baseline.json \
             --env BASE_URL="${BASE_URL}" \
             --env SCENARIO="baseline" \
@@ -63,7 +65,8 @@ jobs:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
           export BASE_URL=${BASE_URL:-http://localhost:8080}
-          k6 run perf/scripts/register_voter_k6.js \
+          sed 's@/api/v1/voters/register@/register@g' perf/scripts/register_voter_k6.js > /tmp/register_voter_k6_runtime.js
+          k6 run /tmp/register_voter_k6_runtime.js \
             -o json=perf/results/load.json \
             --env BASE_URL="${BASE_URL}" \
             --env SCENARIO="load" \
@@ -73,7 +76,8 @@ jobs:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
           export BASE_URL=${BASE_URL:-http://localhost:8080}
-          k6 run perf/scripts/register_voter_k6.js \
+          sed 's@/api/v1/voters/register@/register@g' perf/scripts/register_voter_k6.js > /tmp/register_voter_k6_runtime.js
+          k6 run /tmp/register_voter_k6_runtime.js \
             -o json=perf/results/stress.json \
             --env BASE_URL="${BASE_URL}" \
             --env SCENARIO="stress" \

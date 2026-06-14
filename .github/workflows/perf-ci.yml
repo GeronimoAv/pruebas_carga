@@ -25,12 +25,20 @@ jobs:
         env:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
-          k6 run perf/scripts/register_voter_k6.js             -o json=perf/results/baseline.json             --env BASE_URL="${BASE_URL}"             --env SCENARIO="baseline"
+          k6 run perf/scripts/register_voter_k6.js \
+            -o json=perf/results/baseline.json \
+            --env BASE_URL="${BASE_URL}" \
+            --env SCENARIO="baseline" \
+            --env DATA_FILE="${{ github.workspace }}/perf/data/voters.csv"
       - name: Load
         env:
           BASE_URL: ${{ secrets.PERF_BASE_URL }}
         run: |
-          k6 run perf/scripts/register_voter_k6.js             -o json=perf/results/load.json             --env BASE_URL="${BASE_URL}"             --env SCENARIO="load"
+          k6 run perf/scripts/register_voter_k6.js \
+            -o json=perf/results/load.json \
+            --env BASE_URL="${BASE_URL}" \
+            --env SCENARIO="load" \
+            --env DATA_FILE="${{ github.workspace }}/perf/data/voters.csv"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

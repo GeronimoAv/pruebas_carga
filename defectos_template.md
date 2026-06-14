@@ -21,7 +21,7 @@ Este documento sirve como plantilla para documentar defectos encontrados durante
 
 | ID  | Caso de Prueba | Entrada | Resultado Esperado | Resultado Obtenido | Causa Probable | Estado |
 |-----|----------------|---------|--------------------|--------------------|----------------|--------|
-| XX  | ...            | ...     | ...                | ...                | ...            | Abierto |
+| XX  | ...            | ...     | ...                | ...                | ...            | Abierto|
 
 ---
 

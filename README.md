@@ -13,25 +13,52 @@ Comprender, diseñar e implementar **pruebas de rendimiento** (baseline, carga, 
 
 ## 📑 Índice
 
-- [Conceptos clave](#conceptos-clave)
-- [COMOCE EL TALLER](#comoce-el-taller)
-  - [Estructura de proyecto](#estructura-de-proyecto)
-  - [Herramientas y dependencias](#herramientas-y-dependencias)
-- [Tipos de pruebas de rendimiento](#tipos-de-pruebas-de-rendimiento)
-- [Diseño del plan de pruebas](#diseño-del-plan-de-pruebas)
-- [Modelos de carga](#modelos-de-carga)
-- [Escenarios de prueba](#escenarios-de-prueba)
-- [Métricas y criterios de aceptación](#métricas-y-criterios-de-aceptación)
-- [Script de ejemplo (JMeter)](#script-de-ejemplo-jmeter)
-- [Ejecución local y en CI](#ejecución-local-y-en-ci)
-- [Análisis de resultados](#análisis-de-resultados)
-- [Buenas prácticas](#buenas-prácticas)
-- [Para entregar](#para-entregar-con-este-taller)
-- [Resumen del Taller](#hagamos-un-resumen)
-- [Conclusión](#conclusión)
-- [Recursos recomendados](#recursos-recomendados)
-- [Créditos y uso académico](#créditos-y-uso-académico)
-- [Licencia](#licencia-de-uso)
+- [Taller de Pruebas de Carga y Rendimiento](#taller-de-pruebas-de-carga-y-rendimiento)
+  - [🎯 Objetivo General](#-objetivo-general)
+  - [📑 Índice](#-índice)
+  - [Conceptos clave](#conceptos-clave)
+  - [COMOCE EL TALLER](#comoce-el-taller)
+    - [Estructura de proyecto](#estructura-de-proyecto)
+    - [Herramientas y dependencias](#herramientas-y-dependencias)
+  - [Tipos de pruebas de rendimiento](#tipos-de-pruebas-de-rendimiento)
+  - [Diseño del plan de pruebas](#diseño-del-plan-de-pruebas)
+  - [Modelos de carga](#modelos-de-carga)
+  - [Pre-requisitos](#pre-requisitos)
+  - [Instalación de k6](#instalación-de-k6)
+    - [Windows](#windows)
+      - [Opción 1 – Chocolatey](#opción-1--chocolatey)
+      - [Opción 2 – Winget](#opción-2--winget)
+      - [Opción 3 – Manual](#opción-3--manual)
+    - [Linux / Mac](#linux--mac)
+  - [Escenarios de prueba](#escenarios-de-prueba)
+  - [Métricas y criterios de aceptación](#métricas-y-criterios-de-aceptación)
+  - [Dataset mínimo `perf/data/persons.csv`](#dataset-mínimo-perfdatapersonscsv)
+  - [Script de prueba `perf/scripts/register_person_k6.js`](#script-de-prueba-perfscriptsregister_person_k6js)
+  - [Paso a paso: **Ejecución básica**](#paso-a-paso-ejecución-básica)
+    - [1) Levanta el servicio](#1-levanta-el-servicio)
+    - [2) Baseline (calentamiento + medición corta)](#2-baseline-calentamiento--medición-corta)
+    - [3) Carga (rampa hasta 200 VUs)](#3-carga-rampa-hasta-200-vus)
+    - [estress](#estress)
+    - [4) Resultados](#4-resultados)
+  - [SLO / SLA sugeridos (ajústalos a tu entorno)](#slo--sla-sugeridos-ajústalos-a-tu-entorno)
+  - [Ejecución local y en CI](#ejecución-local-y-en-ci)
+  - [Análisis de resultados](#análisis-de-resultados)
+  - [Buenas prácticas](#buenas-prácticas)
+  - [PARA ENTREGAR CON ESTE TALLER](#para-entregar-con-este-taller)
+    - [1) Repositorio](#1-repositorio)
+    - [2) Wiki (obligatoria)](#2-wiki-obligatoria)
+    - [3) Escenarios y scripts](#3-escenarios-y-scripts)
+    - [4) Reportes y cobertura de escenarios](#4-reportes-y-cobertura-de-escenarios)
+    - [5) Matriz de pruebas de rendimiento](#5-matriz-de-pruebas-de-rendimiento)
+    - [6) Gestión de defectos](#6-gestión-de-defectos)
+    - [7) Integración continua](#7-integración-continua)
+    - [8) Reflexión final (en el Wiki)](#8-reflexión-final-en-el-wiki)
+    - [9) Rúbrica – Taller de Pruebas de Carga y Rendimiento](#9-rúbrica--taller-de-pruebas-de-carga-y-rendimiento)
+  - [Hagamos un resumen](#hagamos-un-resumen)
+  - [Conclusión](#conclusión)
+  - [Recursos recomendados](#recursos-recomendados)
+  - [Créditos y uso académico](#créditos-y-uso-académico)
+  - [Licencia de uso](#licencia-de-uso)
 
 ---
 
@@ -242,17 +269,25 @@ curl -X POST http://localhost:8080/register \
 ### 2) Baseline (calentamiento + medición corta)
 
 ```bash
-set BASE_URL="http://localhost:8080" 
-set SCENARIO="baseline" 
-set k6 run perf/scripts/register_person_k6.js -o json=perf/results/baseline.json
+export BASE_URL="http://localhost:8080" 
+export SCENARIO="baseline" 
+k6 run perf/scripts/register_person_k6.js -o json=perf/results/baseline.json
 ```
 
 ### 3) Carga (rampa hasta 200 VUs)
 
 ```bash
-set BASE_URL=http://localhost:8080
-set SCENARIO='load' 
+export BASE_URL="http://localhost:8080"
+export SCENARIO='load' 
 k6 run perf/scripts/register_person_k6.js -o json=perf/results/load.json
+```
+
+### estress
+
+```bash
+export BASE_URL="http://localhost:8080"
+export SCENARIO="stress"
+k6 run perf/scripts/register_person_k6.js -o json=perf/results/stress.json
 ```
 
 ### 4) Resultados
@@ -271,11 +306,11 @@ Guarda los `*.json` en `perf/results/` y documenta un breve análisis.
 
 ## SLO / SLA sugeridos (ajústalos a tu entorno)
 
-| Métrica         | Objetivo            |
-|-----------------|---------------------|
-| p95 latencia    | ≤ 300 ms            |
-| p99 latencia    | ≤ 800 ms            |
-| Error rate      | < 1%                |
+| Métrica         | Objetivo                 |
+|-----------------|--------------------------|
+| p95 latencia    | ≤ 300 ms                 |
+| p99 latencia    | ≤ 800 ms                 |
+| Error rate      | < 1%                     |
 | Throughput base | ≥ 100 req/s (referencia) |
 
 > Considera tu hardware/infra: en máquinas locales, el throughput puede ser menor; en staging/cluster, mayor.

@@ -14,3 +14,10 @@ hs_err_pid*
 registraduria/target/
 
 *.ini
+.github/copilot-instructions.md
+
+perf/results/baseline.json
+perf/results/load.json 
+perf/results/stress.json
+perf/scripts/generate_persons.py
+documentacion.md

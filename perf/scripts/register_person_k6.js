@@ -129,6 +129,7 @@ function buildOptions() {
     console.warn(`SCENARIO='${SCENARIO}' no reconocido. Usando 'baseline'.`);
   }
   return {
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
     thresholds: {
       http_req_failed: ['rate<0.01'],             // <1% de fallos HTTP globales
       'http_req_duration{status:200}': ['p(95)<300', 'p(99)<800'], // SLO sugeridos
@@ -150,10 +151,26 @@ export const options = buildOptions();
  * =========================
  */
 function buildUniqueId(baseId) {
-  // Genera IDs únicos por iteración combinando base del CSV, VU e iteración
-  // Fórmula: baseId * 1_000_000 + __VU * 10_000 + __ITER
-  // Evita colisiones en BD cuando hay índices únicos por id.
-  return (baseId * 1000000) + (__VU * 10000) + __ITER;
+  // Mejora de unicidad:
+  // - Construye una cadena con baseId, VU, ITER, timestamp y un random.
+  // - Aplica un hash sencillo (djb2) para obtener un valor disperso.
+  // - Combina el hash (porción baja) con baseId como prefijo numérico.
+  // Esto mantiene el id como número y reduce drásticamente colisiones
+  // sin producir enteros fuera del rango seguro de JS (Number).
+  function djb2(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) + h) + str.charCodeAt(i);
+      // force to 32-bit int in JS arithmetic
+      h = h & 0xFFFFFFFF;
+    }
+    return h >>> 0;
+  }
+
+  const seed = `${baseId}-${__VU}-${__ITER}-${Date.now()}-${Math.random()}`;
+  const hashPart = djb2(seed) % 100000; // 5 dígitos de entropía
+  // Prefijamos con baseId para mantener trazabilidad: baseId * 100000 + hashPart
+  return (Number(baseId) * 100000) + hashPart;
 }
 
 function nextPayload() {

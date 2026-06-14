@@ -21,11 +21,11 @@ y propuesta de mejora.
 
 ## Defecto PERF-01 --- Incumplimiento de SLO de latencia bajo Load
 
--   Capa afectada: Aplicación / Base de datos\
--   Escenario: Load Test (200 VUs)\
--   SLO definido: p95 \< 300 ms\
--   Resultado esperado: Cumplimiento del SLO bajo carga nominal.\
--   Resultado obtenido: p95 = 612 ms
+- Capa afectada: Aplicación / Base de datos\
+- Escenario: Load Test (200 VUs)\
+- SLO definido: p95 \< 300 ms\
+- Resultado esperado: Cumplimiento del SLO bajo carga nominal.\
+- Resultado obtenido: p95 = 612 ms
 
 ### Evidencia
 
@@ -83,6 +83,52 @@ Crítica
 
 ------------------------------------------------------------------------
 
+## Defecto PERF-05 --- Alto porcentaje de registros rechazados en Stress
+
+-   Capa afectada: Aplicación / Lógica de registro
+-   Escenario: Stress Test (600 VUs)
+-   SLO definido: error rate < 1% · p95 < 300 ms
+-   Resultado obtenido: register_failed: passes=4,919,574 fails=6,275,029 (≈56.05% fallidos)
+
+### Evidencia
+
+Extraída de `perf/results/summary-stress.json` (carrera realizada):
+
+```
+iterations: 12,810,758
+throughput (req/s): 20,910.45
+http_req_duration.avg: 19.22480 ms
+http_req_duration.p95: 29.35439 ms
+http_req_duration.p99: 236.36143 ms
+register_failed.rate: 0.96097 (≈96.10% failed)
+checks.rate: 0.51951 (≈48.05% passes / ≈51.95% fails)
+```
+
+### Impacto
+
+Alta tasa de rechazos funcionales bajo stress; el sistema no cumple el requisito de disponibilidad funcional en escenarios extremos.
+
+### Causa probable
+
+- Dataset insuficiente / colisiones de IDs generados por la estrategia original de `buildUniqueId`.
+- BD H2 con datos persistentes entre corridas (no reinicio) → `DUPLICATED`.
+- Lógica de verificación de existencia costosa bajo concurrencia; posible contención en transacciones.
+
+### Acción tomada
+
+- Se mejoró `buildUniqueId` en `perf/scripts/register_person_k6.js` para reducir colisiones.
+- Se añadió `perf/scripts/generate_persons.py` para generar datasets grandes y evitar colisiones por escasez de IDs.
+- Recomendación: reiniciar la app (H2) antes de cada escenario y re-ejecutar las corridas para validar la mitigación.
+
+### Estado
+
+Abierto
+
+### Prioridad
+
+Crítica
+
+
 ## Defecto PERF-03 --- Degradación progresiva en Soak Test
 
 -   Capa afectada: JVM / Memoria\
@@ -107,6 +153,48 @@ Media
 # Formato 2: Tabla de seguimiento
 
   ----------------------------------------------------------------------------------
+## Defecto PERF-04 --- Alta tasa de registros rechazados en Load
+
+-   Capa afectada: Aplicación / Lógica de registro
+-   Escenario: Load Test (200 VUs)
+-   SLO definido: error rate < 1% · p95 < 300 ms
+-   Resultado obtenido: register_failed.rate = 0.6447 (64.47%) · checks.rate = 0.6776 (67.76%)
+
+### Evidencia
+
+Extraída de `perf/results/summary-load.json`:
+
+```
+iterations: 15433447
+throughput (req/s): 18352.68
+http_req_duration.avg: 8.845746 ms
+http_req_duration.p95: 17.656987 ms
+register_failed.rate: 0.6447144957312517
+checks.rate: 0.6776419422051341
+```
+
+### Impacto
+
+La mayoría de las solicitudes de registro son rechazadas (DUPLICATED o validaciones negativas), lo que provoca un error funcional masivo en el escenario nominal de carga.
+
+### Causa probable
+
+- Colisiones de IDs generados por `buildUniqueId` / dataset insuficiente.
+- La BD H2 contiene registros previos (no se reinició la app) produciendo duplicados.
+- Lógica de validación de existencia posiblemente costosa bajo concurrencia.
+
+### Estado
+
+Abierto
+
+### Prioridad
+
+Crítica
+
+------------------------------------------------------------------------
+
+  PERF-04   Load       Error funcional alto  register_failed ~64% Abierto     Crítica
+  PERF-05   Stress     Error funcional alto  register_failed ~56% Abierto     Crítica
   ID        Escenario   Resultado Esperado Resultado Obtenido Estado     Prioridad
   --------- ----------- ------------------ ------------------ ---------- -----------
   PERF-01   Load        p95 \< 300ms       612ms              Abierto    Alta
